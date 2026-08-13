@@ -1,0 +1,198 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DeviceStatus {
+  ACTIVE
+  TESTING
+  DEPRECATED
+}
+
+enum BuildType {
+  OFFICIAL
+  UNOFFICIAL
+  COMMUNITY
+  EXPERIMENTAL
+}
+
+enum ReleaseStatus {
+  DRAFT
+  TESTING
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ReportStatus {
+  OPEN
+  CONFIRMED
+  NEED_LOGS
+  FIXED
+  INVALID
+  CLOSED
+}
+
+enum IssueType {
+  BOOTLOOP
+  BATTERY_DRAIN
+  HEATING
+  CAMERA
+  BLUETOOTH
+  WIFI
+  MOBILE_NETWORK
+  FINGERPRINT
+  PERFORMANCE
+  RANDOM_REBOOT
+  APP_CRASH
+  CHARGING
+  OTHER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model Device {
+  id                String        @id @default(cuid())
+  codename          String        @unique
+  name              String
+  brand             String
+  status            DeviceStatus  @default(ACTIVE)
+  romName           String
+  androidVersion    String
+  maintainerName    String
+  maintainerGithub  String
+  description       String        @db.Text
+  imageUrl          String?
+  supportUrl        String?
+  deviceTreeUrl     String?
+  kernelUrl         String?
+  vendorUrl         String?
+  firmwareNote      String?       @db.Text
+  recoveryNote      String?       @db.Text
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  releases          Release[]
+  testerReports     TesterReport[]
+
+  @@index([status])
+  @@index([brand])
+}
+
+model Release {
+  id                    String        @id @default(cuid())
+  slug                  String        @unique
+  deviceId              String
+  title                 String
+  romName               String
+  version               String
+  androidVersion        String
+  buildType             BuildType     @default(UNOFFICIAL)
+  status                ReleaseStatus @default(DRAFT)
+  releaseDate           DateTime
+  securityPatch         String
+  fileName              String
+  fileSizeBytes         BigInt
+  sha256                String
+  downloadUrl           String
+  recoveryRequirement   String?       @db.Text
+  firmwareRequirement   String?       @db.Text
+  flashingInstructions  String        @db.Text
+  changelogRom          String        @db.Text
+  changelogDevice       String        @db.Text
+  changelogKernel       String        @db.Text
+  knownBugs             String        @db.Text
+  notes                 String?       @db.Text
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  device                Device        @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  mirrors               DownloadMirror[]
+  reports               TesterReport[]
+
+  @@index([deviceId])
+  @@index([status])
+  @@index([releaseDate])
+}
+
+model DownloadMirror {
+  id          String   @id @default(cuid())
+  releaseId   String
+  name        String
+  url         String
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  release     Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId])
+}
+
+model TesterReport {
+  id             String       @id @default(cuid())
+  deviceId       String
+  releaseId      String?
+  issueType      IssueType    @default(OTHER)
+  status         ReportStatus @default(OPEN)
+  title          String
+  description    String       @db.Text
+  steps          String       @db.Text
+  logsUrl        String?
+  screenshotsUrl String?
+  reporterName   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  device         Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  release        Release?     @relation(fields: [releaseId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId])
+  @@index([releaseId])
+  @@index([status])
+}
